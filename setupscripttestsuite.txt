@@ -1,0 +1,310 @@
+/*
+ * This script is to initialise the test suite detailed report
+ * and does the archiving of existing reports the existing reports woulid be moved to Reports Archive folder
+ * 
+ * Also this script reads the test dsata and stores into context variabkes wotrkbookdata,workbookheaders
+ */
+import jxl.*
+/*
+ * Initialising the variable
+ */
+ groovyUtils=new com.eviware.soapui.support.GroovyUtils(context)
+ projectPath=groovyUtils.projectPath
+ context.testSteps=0
+ context.runners=[]
+ context.testcasenames=[]
+ context.testcasedescription=[]
+ context.filenames=[]
+ context.testcaseStatus=[]
+ context.testcasesTimetaken=[]
+ context.rowIndex=[]
+ context.prevTime=0.00
+ Date date =new Date()
+ dateTime =date.format('ddMMyy_hhmmss_S').toString()
+
+ /*
+  * creating folder  with the name of project name inside reports if its not exists
+  */
+ folderCreate=new File(projectPath+testSuite.project.getPropertyValue("ProjectReportFolderName")+"/"+testSuite.project.name);
+ if(!folderCreate.exists()){
+ 	folderCreate.mkdirs();
+ }
+ /*
+  * Moving Existing reports into reports_Archieve folder
+  * 
+  */
+ try{
+ 	def projectReportFilePath=testSuite.project.getPropertyValue("ProjectReportFolderName")+"\\"+testSuite.project.name.toString()
+    def archiveReportFilePath=testSuite.project.getPropertyValue("ArchivedReportsFolderName")+"\\"+tesrSuite.project.name.toString()
+    File projectReportFile =new File(projectPath+"\\"+projectReportFilePath);
+    File [] listOfFiles;
+    listOfFiles=projectReportFile.listFiles();
+    if(listOfFiles!=null)
+
+    for(int i=0;i<listOfFiles.length;i++){
+    	def filename=listOfFiles[i].getName();
+    	if(filename.startsWith(testSuite.name.toString().replace("","_"))){
+    		projectReportFile=new File(projectPath+"\\"+projectReportFilePath+"\\"+filename)
+    		if(!new File(projectPath+"\\"+archiverReportFilePath).exists()){
+    			new File(projectPath+"\\"+archiverReportFilePath).mkdirs();
+    		}
+    		projectReportFile.renameTo(new File(projectPath+"\\"+archiverReportFilePath+"\\"+projectReportFile.getName()))
+    	}
+    }
+    log.info "Test Suite Reports archived success"
+ }
+ catch(Throwable e){
+ log.error e;
+ log.info "Test Suite Reports not Archived"	   
+ }
+ /* 
+  *  initialising the test Suite detailed reports
+  */
+try{
+	def detailedReportFileName=testSuite.name.replace(" ","_")+"_Detailed_Report_"+dateTime+".html"
+	context.detailedReportFileName =detailedReportFileName
+	def detailedReportFilePath=groovyUtils.projectPath+testSuite.project.getPropertyValue("projectReportFolderName")+"/"+testSuite.project.name+"/"+detailedReportFileName
+	File file =new File(detailedReportFilePath);
+	Writer writer=null;
+	writer =new FileWriter(file,true);
+	/*
+	 * Adding headers to the deatiled report
+	 */
+		 writer.write("<html>")
+		writer.write("<Table border=0 cellSpacing=1 cellPadding=1 width='100%>")
+		writer.write("<tr>")
+		writer.write("<TD align='left'>")
+		//Writer.write("<TD align=right'><img src= '"+groovyUtils.projectPath+"/Logos/Client.jpg' alt='HPS' height='50' width='150'/></TD>")
+		writer.write("<TD align='center'><H4 align='center'><font color='660066' face='arial' color='#E0E0E0' size=5><b>Execution Detailed Report</b></font></H4></TD>")
+		//Writer.write("<TD align='right'><img src= '"+groovyUtils.projectPath+"/Logos/Cigniti.jpg' alt='Cigniti' height='50' width='150'/>>/TD")
+		writer.write("</tr></table>")
+		writer.write("<br/>")
+		writer.flush();
+		writer.close();
+}catch(Throwable e){
+log.error e;}
+/*
+ * starting of reading the test data workbook
+ */
+ try{  
+ def workBookData= new Hashtable()
+ def workBookHeaders = new Hashtable()
+ def listNm=""
+def headingNm =""
+int columns=0
+int rows=0
+def testData =testRunner.testCase.testSuite.project.getPropertyValue("TestDataFolder")
+def testDataWorkBook =testRunner.testCase.testSuite.project.getPropertyValue("InputFileName")
+def filePath = projectPath+"\\"+testData+"\\"+testDataWorkBook
+
+Workbook workBook = Workbook.getWorkbook(new File(filePath))
+Sheet sheet
+context.setProperty("workBookData",workBookData)
+context.setProperty("workBookHeaders",workBookHeaders)
+
+String [] sheetNames=workBook.getSheetNames()
+
+
+/*Excluding the specific sheets whaich are in test data
+*/ 
+String excludesheetNames=testRunner.testCase.testSuite.project.getPropertyValue("ExcludeTestDataSheetNames")
+log.info excludesheetNames
+/*
+*Looping thru tet data worksheets  to read the data
+*/
+
+for(int i=0;i<workBook.getNumberOfSheets();i++){
+tempInputList=[]
+if(!excludesheetNames.contains(sheetNames[i].toString())){
+inputSheet=workBook.getSheet(""+testRunner.testCase.testSuite.getPropertyValue("InputSheet").toString())
+
+/*Varied input sheets */
+sheet =workBook.getSheet(i)
+
+columns =sheet.getColumns()
+
+rows =sheet.getRows()
+
+context.setProperty("inputSheet",inputSheet)
+context.setProperty("sheet",sheet)
+context.setProperty("columns",columns)
+context.setProperty("rows",rows)
+inputSheetName ="inputSheetData" +i
+inputSheetHeadersName="inputSheetHeadersName"+i
+
+try{
+/*
+* Calling the method readDataFromSheet
+*/
+
+tempInputList =readDataFromSheet(inputSheetHeadersName)
+//log.info "Sant" + tempInputList
+}catch(e){
+log.error e;
+}
+/*
+*Putting the list in workBookData  hash table  with the key inputSheetName
+*/
+
+workBookData.put(inputSheetName,tempInputList)
+context.setProperty("workBookData",workBookData)
+}
+}
+}catch( Throwable e ){
+	log.error e;
+}
+//log.info "NOt Read the Test Data"
+
+
+/* 
+*This method returns a list by taking parameter inputsheetheadersname
+*/
+
+def readDataFromSheet(inputSheetHeadersName){
+
+/*
+*Initialising the required variables
+*/
+
+int count =0
+def configIndustry=testRunner.testCase.testSuite.project.getPropertyValue("Run_Industry").toLowerCase()
+def certFlag=testRunner.testCase.testSuite.project.getPropertyValue("CERTFlag").toLowerCase()
+def smokeTestFlag=testRunner.testCase.testSuite.project.getPropertyValue("SmokeTestFlag").toLowerCase()
+def columns =context.getProperty("columns")
+def rows=context.getProperty("rows")
+Sheet sheet=context.getProperty("sheet")
+Sheet inputSheet= context.getProperty("inputSheet")
+workBookHeaders= context.getProperty("workBookHeaders")
+def listOfRows=[]
+String cellData
+String line=""
+/* 
+*getting the sheet first row headers and adding to list
+*/
+Cell[] rowCells =sheet.getRow(0)
+log.info "Santa"+ rowCells
+for(Cell cell:rowCells){
+cellData =cell.getContents().toString()
+//log.info "gumgumalu"+cellData
+int col =cell.getColumn()
+if(cellData.equalsIgnoreCase("RunRow")){
+context.setProperty("runRowColumn",col)
+}
+else if(cellData.equalsIgnoreCase("RunCert")){
+context.setProperty("runCertColumn",col)
+}
+else if(cellData.equalsIgnoreCase("RunSmoke")){
+context.setProperty("runSmokeColumn",col)
+}
+else if(cellData.equalsIgnoreCase("TestScenario_ID")&&context.getProperty("testScenarioColumn")==null){
+context.setProperty("testScenarioColumn",col)
+}
+else if(cellData.equalsIgnoreCase("Industry")){
+context.setProperty("industryColumn",col)
+}
+
+
+
+if(cellData ==""){
+cellData=" "
+}
+if (line==""){
+line+=cellData
+}else{ line+="~"+cellData}
+}
+def runRowColumn =context.getProperty("runRowColumn")
+def runCertColumn =context.getProperty("runcertColumn")
+def runSmokeColumn =context.getProperty("runSmokeColumn")
+def testScenarioColumn =context.getProperty("testScenarioColumn")
+def industryColumn=context.getProperty("industryColumn")
+workBookHeaders.put(inputSheetHeadersName,line)
+line="";
+boolean executeRowFlag =false;
+int testSceRow=0
+if(context.getProperty("testSceRow")!=null){
+testSceRow=context.getProperty("testSceRow")
+}
+
+/*
+*Looping thru the test data input and putting the workBookHeaders table
+/*
+ * 
+ */
+for(int row= testSceRow; row<rows;row++){
+runRow=inputSheet.getCell(runRowColumn,row).getContents().trim()
+log.info "what is row numv"+row
+if(runCertColumn!=null)
+runCert=inputSheet.getCell(runCertColumn,row).getContents().trim()
+else
+runCert="false"
+if(runSmokeColumn!=null)
+runSmoke=inputSheet.getCell(runSmokeColumn,row).getContents().trim()
+else
+runSmoke="false"
+if(industryColumn!=null)
+tCIndustry=inputSheet.getCell(industryColumn,row).getContents().trim().toLowerCase()
+else
+tCIndustry=configIndustry
+String testDataTestSceId=inputSheet.getCell(testScenarioColumn,row).getContents().trim()
+
+if(context.getProperty("testSceRow")== null)
+
+context.setProperty("testSceRow",row)
+try{
+executeRowFlag =executeRow(configIndustry.contains(tCIndustry),certFlag,smokeTestFlag,runRow,runCert,runSmoke)
+}catch(e){
+log.error e
+}
+if(executeRowFlag){
+rowCells=sheet.getRow(row)
+for (Cell cell:rowCells){
+	cellData =cell.getContents().toString()
+	if(cellData==""){
+		cellData=" "
+	}
+	if(line==""){
+		line+=cellData
+	}
+	else
+		line+="~" +cellData
+	
+}
+listOfRows[count]=line
+line=""
+count++
+
+}
+}
+return listOfRows
+}
+/*
+* This method returns  boolean value by taking string parameters tCIndustry,certFlag,smokeTestFlag,runRow,runCert,runSmoke 
+*/
+def executeRow (tCIindustry,certFlag,smokeTestFlag,runRow,runCert,runSmoke){
+
+boolean exeRow =true
+if(!smokeTestFlag.equalsIgnoreCase("true")){
+	if(tCIindustry==true){
+		if(certFlag.equals("true")&& (runCert.equals("")||runCert.equals("false"))){
+			exeRow=false
+		}
+		else if(certFlag.equals("false")&& runRow.equals("false")){
+			exeRow=false
+		}
+	}else{
+		exeRow=false
+	}
+}
+else{
+	if(runSmoke.equals("true")){
+		if(tCIindustry==false){
+			exeRow=false
+		}
+		
+	}else if (runSmoke.equals("false")||runSmoke.equals("")){
+		exeRow=false
+	}
+}
+return exeRow
+}
+

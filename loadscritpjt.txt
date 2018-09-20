@@ -1,0 +1,145 @@
+import jxl.*
+//Config File Setup
+def groovyUtils= new com.eviware.soapui.support.GroovyUtils(context)
+def projectPath = groovyUtils.projectPath
+log.info projectPath
+boolean isHostFound=false
+//Getting HostName
+String hostName =java.net.InetAddress.getLocalHost().getHostName().toUpperCase()
+log.info hostName
+
+def configFileFolder=project.getPropertyValue("ConfigFileFolderName")
+log.info configFileFolder
+def file=project.getPropertyValue("ConfigFileName")
+log.info file
+def userCredSheet=project.getPropertyValue("UserCredSheetName")
+log.info userCredSheet
+def envSheet=project.getPropertyValue("EnvironmentSheetName")
+log.info envSheet
+filePath=projectPath+"\\"+configFileFolder+"\\"+file
+log.info "Config File Path:"+filePath
+try{
+Workbook wb = Workbook.getWorkbook(new File(filePath))
+Sheet sheet=null
+def headers=""
+def values=""
+String line=""
+String data=""
+for(int sheetNo=0;sheetNo<wb.getNumberOfSheets();sheetNo++)
+{
+sheet=wb.getSheet(sheetNo)
+context.setProperty("sheet",sheet)
+//Fetching user credentials
+if(sheet.getName().trim().equalsIgnoreCase(envSheet))
+{
+headers=ReadHeaders(envSheet,hostName)
+//log.info headers.toString()
+values=ReadValues(envSheet,hostName)
+//log.info values.toString()
+SetProperties(headers,values)
+}
+else if(sheet.getName().trim().equalsIgnoreCase(userCredSheet))
+{
+headers=ReadHeaders(userCredSheet,hostName)
+values=ReadValues(userCredSheet,hostName)
+SetProperties(headers,values)
+}
+}
+log.info "Loaded the config file!!"
+}catch(Exception e){
+log.error e
+log.error "Not Loaded the Config file"
+}
+def ReadValues(sheetName,hostName)
+{
+sheet=context.getProperty("sheet")
+int columns =sheet.getColumns()
+int rows =sheet.getRows()
+boolean isHostFound=false
+def values=""
+def line=""
+for(int col=0;col<columns;col++)
+{
+if(sheet.getCell(col,0).getContents().equalsIgnoreCase(hostName))
+{
+for(int row=0;row<rows;row++)
+{
+data=sheet.getCell(col,row).getContents() + ","
+line+=data
+}
+if(line.length()>0 && line.charAt(line.length()-1)==",")
+{
+line=line.substring(0,line.length()-1)
+}
+if (line.length() > 0 && line.charAt(line.length()-1)==',')
+{
+line=line+" "
+}
+values= line
+line=""
+isHostFound=true
+}
+if(isHostFound)
+{
+log.info "HostName Found is "+sheetName+" Sheet!!"
+break
+}
+}
+if(!isHostFound)
+{
+log.error "HostName Not Found in "+sheetName+" Sheet!!"
+}
+//log.info values
+return values
+}
+def ReadHeaders(sheetName, hostName)
+{
+sheet=context.getProperty("sheet")
+int rows =sheet.getRows()
+def values =""
+def line =""
+for(int row=0;row<rows;row++)
+{
+data=sheet.getCell(0,row).getContents()+","
+line+=data
+}
+if(line.length()>0 && line.charAt(line.length()-1)==',')
+{
+line=line.substring(0,line.length()-1)
+}
+if(line.length() >0 && line.charAt(line.length()-1)==',')
+{
+line=line+" "
+}
+headers=line
+line=""
+//log.info headers
+return headers
+}
+
+def SetProperties(headers,values)
+{
+if(values!="")
+{log.info "inside the Set Propertes"+ values
+def header =headers.split(",")
+def value= values.split(",")
+for (int count=0;count<header.length;count++)
+{
+log.info header
+log.info value
+def headerName=header[count]
+def actualValue =value[count]
+log.info headerName+":"+actualValue
+project.setPropertyValue(headerName,actualValue)
+}
+}
+}
+//creating RunId with format windowusername_system and current time
+String userName=System.getProperty("user.name")
+log.info userName
+Date date = new Date()
+dateTime=date.format('MMddyy_hhmmss_S').toString()
+runID = userName + "_" +dateTime
+log.info"RunID:"+runID
+project.setPropertyValue("RunID",runID)
+ 
